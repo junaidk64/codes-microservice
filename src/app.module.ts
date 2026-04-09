@@ -22,7 +22,7 @@ import './common/polyfills/crypto.polyfill'
 				entities: [CodeEntity],
 				migrations: ['dist/migrations/*{.js,.ts}'],
 				synchronize: false,
-				logging: configService.get<string>('ENVIRONMENT') === 'development',
+				// logging: configService.get<string>('ENVIRONMENT') === 'development',
 			}),
 		}),
 		CodesModule,
