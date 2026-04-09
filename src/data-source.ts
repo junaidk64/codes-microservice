@@ -13,7 +13,10 @@ const AppDataSource = new DataSource({
   password: process.env.MYSQL_PASS || 'admin',
   database: process.env.MYSQL_NAME || 'codes_service',
   entities: [CodeEntity],
-  migrations: ['src/migrations/*{.ts,.js}'],
+  migrations:
+    process.env.NODE_ENV === 'production'
+      ? ['dist/migrations/*{.js,.ts}']
+      : ['src/migrations/*{.ts,.js}'],
   synchronize: false,
   logging: process.env.ENVIRONMENT === 'development',
 });

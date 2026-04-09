@@ -35,6 +35,22 @@ npm install
 npm run start:dev
 ```
 
+## Database migrations
+
+Run migrations before starting the app in environments where `synchronize` is disabled.
+
+Local/dev:
+
+```bash
+npm run migration:run
+```
+
+Production (after `npm run build`):
+
+```bash
+npm run migration:run:prod
+```
+
 ## Notes
 
 - Use this service as the single source of truth for code records.
