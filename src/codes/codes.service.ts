@@ -41,6 +41,10 @@ type MainOrderResponse = {
 		_id: string
 		status: string
 		formations: MainOrderFormation[]
+		businessId: {
+			_id: string
+			name: string
+		}
 	}
 }
 
@@ -144,9 +148,10 @@ export class CodesService {
 	private async uploadXlsx(
 		orderId: string,
 		tempFilePath: string,
+		businessName?: string,
 	): Promise<{ url: string; key: string }> {
 		const fileBuffer = await fs.promises.readFile(tempFilePath)
-		const fileName = `order-codes-${orderId}.xlsx`
+		const fileName = `${businessName || 'codes'}-${new Date().getTime()}-${orderId}.xlsx`
 
 		if (this.storageProvider === 'local') {
 			await fs.promises.mkdir(this.storagePath, { recursive: true })
@@ -505,7 +510,11 @@ export class CodesService {
 				})),
 			)
 
-			const uploadedFile = await this.uploadXlsx(orderId, tempFilePath)
+			const uploadedFile = await this.uploadXlsx(
+				orderId,
+				tempFilePath,
+				order?.businessId?.name,
+			)
 			uploadedKey = uploadedFile.key
 
 			await queryRunner.commitTransaction()
