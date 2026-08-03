@@ -151,7 +151,7 @@ export class CodesService {
 		businessName?: string,
 	): Promise<{ url: string; key: string }> {
 		const fileBuffer = await fs.promises.readFile(tempFilePath)
-		const fileName = `${businessName || 'codes'}-${new Date().getTime()}-${orderId}.xlsx`
+		const fileName = `${businessName || 'codes'}-${new Date().toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace('/', '-').replace('/', '-')}-${orderId}.xlsx`
 
 		if (this.storageProvider === 'local') {
 			await fs.promises.mkdir(this.storagePath, { recursive: true })
