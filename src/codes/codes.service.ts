@@ -2,6 +2,7 @@ import {
 	BadRequestException,
 	Injectable,
 	InternalServerErrorException,
+	Logger,
 	NotFoundException,
 } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
@@ -57,6 +58,7 @@ type GenerateCodesResponse = {
 
 @Injectable()
 export class CodesService {
+	private readonly logger = new Logger(CodesService.name)
 	private readonly codeInsertChunkSize = 5000
 
 	constructor(
@@ -151,14 +153,19 @@ export class CodesService {
 		businessName?: string,
 	): Promise<{ url: string; key: string }> {
 		const fileBuffer = await fs.promises.readFile(tempFilePath)
-		const fileName = `${businessName || 'codes'}-${new Date().toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace('/', '-').replace('/', '-')}-${orderId}.xlsx`
+		const safeName =
+			(businessName || '')
+				.normalize('NFKD')
+				.replace(/[^a-zA-Z0-9_-]+/g, '-')
+				.replace(/^-+|-+$/g, '') || 'codes'
+		const fileName = `${safeName}-${new Date().toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace('/', '-').replace('/', '-')}-${orderId}.xlsx`
 
 		if (this.storageProvider === 'local') {
 			await fs.promises.mkdir(this.storagePath, { recursive: true })
 			const targetPath = path.join(this.storagePath, fileName)
 			await fs.promises.writeFile(targetPath, fileBuffer)
 			return {
-				url: `${this.localStorageUrl}${fileName}`,
+				url: `${this.localStorageUrl.replace(/\/$/, '')}/${this.encodeKey(fileName)}`,
 				key: fileName,
 			}
 		}
@@ -180,11 +187,26 @@ export class CodesService {
 
 		await s3.upload(uploadParams).promise()
 
+		const encodedKey = this.encodeKey(key)
 		const url = this.awsPublicUrl
-			? `${this.awsPublicUrl.replace(/\/$/, '')}/${key}`
-			: `https://${this.awsBucketName}.s3.amazonaws.com/${key}`
+			? `${this.awsPublicUrl.replace(/\/$/, '')}/${encodedKey}`
+			: `https://${this.awsBucketName}.s3.amazonaws.com/${encodedKey}`
 
 		return { url, key }
+	}
+
+	private encodeKey(key: string): string {
+		return key.split('/').map(encodeURIComponent).join('/')
+	}
+
+	private assertValidUrl(url: string) {
+		try {
+			new URL(url)
+		} catch {
+			throw new InternalServerErrorException(
+				`Generated codes file URL is not a valid absolute URL: "${url}". Check STORAGE_LOCAL_URL / STORAGE_AWS_URL.`,
+			)
+		}
 	}
 
 	private async deleteUploadedFile(key: string) {
@@ -516,6 +538,7 @@ export class CodesService {
 				order?.businessId?.name,
 			)
 			uploadedKey = uploadedFile.key
+			this.assertValidUrl(uploadedFile.url)
 
 			await queryRunner.commitTransaction()
 			let orderUpdateResult: any
@@ -525,7 +548,10 @@ export class CodesService {
 					codesExcelUrl: uploadedFile.url,
 					totalCodesCreated: rows.length,
 				})
-			} catch (orderUpdateError) {
+			} catch (orderUpdateError: any) {
+				this.logger.error(
+					`Main API callback failed for order ${orderId}: status=${orderUpdateError?.response?.status} data=${JSON.stringify(orderUpdateError?.response?.data)} message=${orderUpdateError?.message}`,
+				)
 				await this.codesRepository.delete({ orderId })
 				await this.deleteUploadedFile(uploadedKey)
 				throw orderUpdateError
